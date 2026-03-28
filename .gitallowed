@@ -1,0 +1,4 @@
+# False positives for git-secrets
+# AWS account IDs are not secrets (per AWS documentation)
+# This pattern existed in a historical commit in example documentation
+YOUR_ACCOUNT_ID

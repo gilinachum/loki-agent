@@ -422,7 +422,7 @@ Provides a single-pane view of all alarms, service health, compute resources, ne
 ```bash
 # Required: replace these with your values
 INSTANCE_ID="i-0229529f514ef6fd7"
-ACCOUNT_ID="YOUR_ACCOUNT_ID"
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 DASHBOARD_TITLE="Loki"  # Recommended: use the agent's name (e.g. "Loki", "Loki-Staging", "Loki-Prod")
 
 sed -e "s/INSTANCE_ID/$INSTANCE_ID/g" \
