@@ -2,7 +2,7 @@
 
 > **Purpose:** Set up a private Telegram group where the human owner can broadcast messages to multiple Loki instances across separate AWS accounts and receive replies from all of them in one place.
 >
-> **Prerequisites:** Telegram bot already configured (see `BOOTSTRAP-TELEGRAM.md`). The bot must be working in DMs first.
+> **Prerequisites:** Complete `BOOTSTRAP-TELEGRAM.md` first. Your bot must be working in DMs (sending and receiving messages) before setting up a group. Do not attempt this bootstrap until regular Telegram integration is confirmed working.
 >
 > If `memory/.bootstrapped-telegram-group` exists, this is already done — skip.
 
