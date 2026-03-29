@@ -127,10 +127,15 @@ openclaw config patch <<'EOF'
       "groups": {
         "GROUP_CHAT_ID": {
           "enabled": true,
-          "requireMention": false,
+          "requireMention": true,
           "allowFrom": ["OWNER_USER_ID"]
         }
       }
+    }
+  },
+  "messages": {
+    "groupChat": {
+      "mentionPatterns": ["@fleet", "@all"]
     }
   }
 }
@@ -141,8 +146,15 @@ EOF
 - `groupPolicy: "allowlist"` — only explicitly listed groups are processed (all others silently dropped)
 - `groupAllowFrom` — global filter: only these user IDs can trigger the bot in any group
 - `groups.GROUP_CHAT_ID.enabled: true` — this specific group is allowed
-- `groups.GROUP_CHAT_ID.requireMention: false` — bot responds to every message (no @mention needed). This is what makes broadcast work.
+- `groups.GROUP_CHAT_ID.requireMention: true` — bot only responds when mentioned or replied to (prevents all bots answering every message)
 - `groups.GROUP_CHAT_ID.allowFrom` — per-group filter: only these user IDs trigger the bot in this group
+- `mentionPatterns: ["@fleet", "@all"]` — custom keywords that ALL bots in the group treat as a mention (broadcast trigger)
+
+**How to talk in the group:**
+- **`@fleet check GuardDuty`** — all bots respond (broadcast)
+- **`@all status`** — all bots respond (broadcast)
+- **Reply to a specific bot's message** — only that bot responds (targeted)
+- **`@bot_username do X`** — only that specific bot responds (targeted)
 
 OpenClaw restarts automatically after the config change.
 
