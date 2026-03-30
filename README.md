@@ -8,14 +8,9 @@
 
 > **TL;DR — deploy Loki:**
 >
-> **macOS / Linux / WSL (works in bash and zsh):**
+> **macOS / Linux / WSL / CloudShell:**
 > ```sh
-> curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/install.sh -o /tmp/loki-install.sh && bash /tmp/loki-install.sh
-> ```
->
-> **AWS CloudShell:**
-> ```sh
-> curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/install.sh -o /tmp/loki-install.sh && bash /tmp/loki-install.sh
+> curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/install.sh | bash
 > ```
 >
 > Requires: AWS CLI configured, admin access on a dedicated AWS account. The script walks you through everything.
@@ -24,12 +19,13 @@
 >
 > ⚠️ **This is an experiment, not a security product.** Loki can enable AWS security services and flag findings, but it does not replace professional security review, compliance auditing, or threat modeling. An LLM with admin access can cause damage — treat it accordingly.
 >
+> After deploying, run the [Essential Bootstraps](https://github.com/inceptionstack/loki-agent/tree/main/bootstraps/essential) — see [Getting Started](#getting-started) below.
+>
 > **To remove a Loki deployment:**
 > ```sh
 > curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/uninstall.sh -o /tmp/loki-uninstall.sh && bash /tmp/loki-uninstall.sh
 > ```
 >
-> After your first chat, run the [Bootstrap Scripts](https://github.com/inceptionstack/loki-agent/wiki/Bootstrap-Scripts-Guide) to set up security, skills, memory search, and more.
 
 ---
 ## What's This Experiment About?
@@ -203,26 +199,20 @@ Loki is built on [OpenClaw](https://github.com/openclaw/openclaw), the open-sour
 ---
 ## Getting Started
 
-### Option 1: One-command install (recommended)
+### Step 1: Install Loki
 
-**macOS / Linux / WSL** (works in bash, zsh, and AWS CloudShell):
+One-command deploy (macOS / Linux / WSL / CloudShell):
 
 ```sh
-curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/install.sh -o /tmp/loki-install.sh && bash /tmp/loki-install.sh
+curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/install.sh | bash
 ```
 
+The installer verifies AWS permissions, lets you select instance size and deployment method (CloudFormation / SAM / Terraform), then deploys automatically.
 
 > **Works from AWS CloudShell!** You can run the installer directly from [AWS CloudShell](https://console.aws.amazon.com/cloudshell/) — no local setup needed. CloudShell already has AWS credentials configured via your console session. If you pick Terraform as the deployment method, the installer will offer to install it automatically (no root required).
 
-**What the installer does:**
-- Verifies AWS credentials and checks IAM permissions
-- Lets you pick instance size (t4g.medium/large/xlarge)
-- Choose deployment method: CloudFormation Console, CloudFormation CLI, SAM, or **Terraform** (auto-installs if needed)
-- For Terraform: optionally sets up S3 backend with DynamoDB locking
-- Deploys everything and monitors progress until Loki is ready
-- Shows you the SSM connect command when done
-
-### Option 2: Manual deploy
+<details>
+<summary><strong>Manual deploy (alternative)</strong></summary>
 
 ```bash
 # Clone
@@ -245,6 +235,53 @@ loki tui
 ```
 
 Full deployment guide: [Deploying Loki on AWS](https://github.com/inceptionstack/loki-agent/wiki/Deploying-Loki-on-AWS)
+
+</details>
+
+### Step 2: Run the Essential Bootstraps
+
+> **Important — these reduce mistakes and improve agent behavior significantly.**
+
+After connecting to Loki for the first time, run the essential bootstraps. These are located at: [`bootstraps/essential/`](https://github.com/inceptionstack/loki-agent/tree/main/bootstraps/essential)
+
+**Example prompt** — paste this into your Loki chat:
+
+> *"Loki please bootstrap yourself based on this url https://github.com/inceptionstack/loki-agent/tree/main/bootstraps/essential"*
+
+Available essential bootstraps:
+
+- **BOOTSTRAP-ALARMS** — Configures CloudWatch alarm monitoring
+- **BOOTSTRAP-CODING-GUIDELINES** — Sets development standards and coding practices
+- **BOOTSTRAP-DAILY-UPDATE** — Configures daily status update procedures
+- **BOOTSTRAP-DIAGRAMS** — Enables architecture diagram generation
+- **BOOTSTRAP-DISK-SPACE-STRAT** — Sets up disk space management strategy
+- **BOOTSTRAP-MCPORTER** — Configures MCPorter for MCP tool management
+- **BOOTSTRAP-MEMORY-SEARCH** — Enables persistent memory search functionality
+- **BOOTSTRAP-MODEL-CONFIG** — Configures AI model settings and preferences
+- **BOOTSTRAP-PLAYWRIGHT** — Sets up Playwright browser automation
+- **BOOTSTRAP-SECRETS-AWS** — Configures AWS secrets and credential management
+- **BOOTSTRAP-SECURITY** — Establishes security protocols and guidelines
+- **BOOTSTRAP-SKILLS** — Configures skills and capabilities
+
+### Step 3: Run the Optional Bootstraps
+
+> Nice to have — take a look and pick what fits your workflow.
+
+After running essential bootstraps, run the optional bootstraps of your choice, located at: [`bootstraps/optional/`](https://github.com/inceptionstack/loki-agent/tree/main/bootstraps/optional)
+
+Available optional bootstraps:
+
+- **BOOTSTRAP-GITHUBACTION-CODE-REVIEW** — Integrates GitHub Actions with automated code review
+- **BOOTSTRAP-PIPELINE-NOTIFICATIONS** — Sets up CI/CD pipeline notifications
+- **BOOTSTRAP-WEB-UI** — Configures the web user interface
+- **OPTIMIZE-TOO-LARGE-CONTEXT** — Optimization strategies for large context windows
+
+### Step 4: Telegram Integration (if needed)
+
+If you want to use Loki via Telegram, run the Telegram bootstraps located at: [`bootstraps/telegram/`](https://github.com/inceptionstack/loki-agent/tree/main/bootstraps/telegram)
+
+- **BOOTSTRAP-TELEGRAM** — Sets up basic Telegram bot integration
+- **BOOTSTRAP-TELEGRAM-GROUP** — Configures Telegram group chat functionality
 
 ### Uninstall
 
