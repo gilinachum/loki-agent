@@ -51,7 +51,7 @@ fi
 # ============================================================================
 # UI helpers
 # ============================================================================
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 info()  { echo -e "${BLUE}▸${NC} $1"; }
 ok()    { echo -e "${GREEN}✓${NC} $1"; }
@@ -228,7 +228,61 @@ preflight_checks() {
   confirm_or_abort "Deploy to account ${ACCOUNT_ID} in ${REGION}?" "default_yes"
 
   check_permissions
+  check_vpc_quota
   check_existing_deployments
+}
+
+check_vpc_quota() {
+  echo ""
+  info "Checking VPC quota..."
+  local vpc_count vpc_limit
+  vpc_count=$(aws ec2 describe-vpcs --region "$REGION" \
+    --query 'length(Vpcs)' --output text 2>/dev/null || echo "0")
+  vpc_limit=$(aws service-quotas get-service-quota \
+    --service-code vpc --quota-code L-F678F1CE --region "$REGION" \
+    --query 'Quota.Value' --output text 2>/dev/null || echo "5")
+  # Truncate decimals (quota API returns 5.0)
+  vpc_limit=${vpc_limit%%.*}
+
+  local remaining=$((vpc_limit - vpc_count))
+  if [[ $remaining -le 0 ]]; then
+    echo ""
+    echo -e "  ${RED}VPC quota reached: ${vpc_count}/${vpc_limit} VPCs in ${REGION}${NC}"
+    echo "  Loki needs 1 VPC. You have none remaining."
+    echo ""
+    if confirm "Request a VPC quota increase (+5) now?" "default_yes"; then
+      local request_id
+      request_id=$(aws service-quotas request-service-quota-increase \
+        --service-code vpc --quota-code L-F678F1CE \
+        --desired-value $((vpc_limit + 5)) --region "$REGION" \
+        --query 'RequestedQuota.Id' --output text 2>/dev/null || echo "")
+      if [[ -n "$request_id" ]]; then
+        ok "Quota increase requested (id: ${request_id})"
+        info "New limit: $((vpc_limit + 5)) VPCs — usually approved within minutes"
+        info "Check status: https://${REGION}.console.aws.amazon.com/servicequotas/home/services/vpc/quotas/L-F678F1CE"
+        echo ""
+        confirm_or_abort "Wait and retry, or continue anyway (may fail)?"
+      else
+        warn "Could not request quota increase automatically"
+        echo "  Request manually: https://${REGION}.console.aws.amazon.com/servicequotas/home/services/vpc/quotas/L-F678F1CE"
+        confirm_or_abort "Continue anyway (deploy will likely fail)?"
+      fi
+    else
+      confirm_or_abort "Continue anyway (deploy will likely fail)?"
+    fi
+  elif [[ $remaining -le 1 ]]; then
+    warn "VPC quota is tight: ${vpc_count}/${vpc_limit} VPCs in ${REGION} (${remaining} remaining)"
+    echo "  Loki needs 1 VPC."
+    if confirm "Request a quota increase (+5) as a precaution?" ; then
+      aws service-quotas request-service-quota-increase \
+        --service-code vpc --quota-code L-F678F1CE \
+        --desired-value $((vpc_limit + 5)) --region "$REGION" >/dev/null 2>&1 \
+        && ok "Quota increase requested (+5)" \
+        || warn "Could not request quota increase (non-fatal)"
+    fi
+  else
+    ok "VPC quota: ${vpc_count}/${vpc_limit} used (${remaining} remaining)"
+  fi
 }
 
 check_permissions() {
@@ -925,6 +979,9 @@ wait_for_bootstrap() {
 }
 
 show_complete() {
+  local ssm_cmd
+  ssm_cmd="$(ssm_connect_cmd "$INSTANCE_ID")"
+
   echo ""
   echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
   echo -e "${GREEN}║         🤖 Loki is deployed and running!    ║${NC}"
@@ -935,12 +992,15 @@ show_complete() {
   echo -e "  ${BOLD}Region:${NC}    ${DEPLOY_REGION}"
   echo -e "  ${BOLD}Account:${NC}   ${ACCOUNT_ID}"
   echo ""
-  echo -e "  ${BOLD}Connect:${NC}   $(ssm_connect_cmd "$INSTANCE_ID")"
-  echo -e "  ${BOLD}Then run:${NC}  loki tui"
-  echo -e "               (logged in as ec2-user with loki aliases ready)"
-  echo ""
   echo -e "  ${BOLD}Docs:${NC}      ${DOCS_URL}"
-  echo -e "  ${BOLD}Clone dir:${NC} ${CLONE_DIR}"
+  echo ""
+  echo -e "${CYAN}┌──────────────────────────────────────────────────────────────┐${NC}"
+  echo -e "${CYAN}│${NC}  ${BOLD}👉 NEXT STEP: Connect to your agent${NC}                         ${CYAN}│${NC}"
+  echo -e "${CYAN}│${NC}                                                              ${CYAN}│${NC}"
+  echo -e "${CYAN}│${NC}  ${GREEN}${ssm_cmd}${NC}"
+  echo -e "${CYAN}│${NC}                                                              ${CYAN}│${NC}"
+  echo -e "${CYAN}│${NC}  Then run: ${BOLD}loki tui${NC}                                          ${CYAN}│${NC}"
+  echo -e "${CYAN}└──────────────────────────────────────────────────────────────┘${NC}"
   echo ""
 
   if [[ -n "${CLONE_DIR:-}" ]] && confirm "Remove cloned repo directory (${CLONE_DIR})?" ; then
