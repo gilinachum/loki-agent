@@ -33,7 +33,15 @@
 
 ### Step 1: Install Loki
 
-Run the install command from the TL;DR above. The installer verifies AWS permissions, lets you select instance size and deployment method (CloudFormation / SAM / Terraform), then deploys automatically.
+Run the install command from the TL;DR above. The installer verifies AWS permissions, lets you select your **agent pack**, instance size, and deployment method (CloudFormation / SAM / Terraform), then deploys automatically.
+
+**Agent packs available:**
+| Pack | Description | Instance | Data Volume |
+|------|-------------|----------|-------------|
+| **OpenClaw** (default) | Stateful AI agent with 24/7 gateway, persistent memory, Telegram/Discord/Slack | t4g.xlarge recommended | 80GB |
+| **Hermes** | NousResearch CLI agent — lighter, terminal-focused | t4g.medium sufficient | None needed (set to 0) |
+
+The installer asks which pack to deploy and adjusts defaults accordingly.
 
 > **Works from AWS CloudShell!** You can run the installer directly from [AWS CloudShell](https://console.aws.amazon.com/cloudshell/) — no local setup needed. CloudShell already has AWS credentials configured via your console session. If you pick Terraform as the deployment method, the installer will offer to install it automatically (no root required).
 
@@ -45,11 +53,23 @@ Run the install command from the TL;DR above. The installer verifies AWS permiss
 git clone https://github.com/inceptionstack/loki-agent.git
 cd loki-agent/deploy/cloudformation
 
-# Deploy
+# Deploy (OpenClaw — default)
 aws cloudformation create-stack \
   --stack-name my-loki \
   --template-body file://template.yaml \
   --parameters ParameterKey=EnvironmentName,ParameterValue=my-loki \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+
+# Deploy (Hermes — lighter alternative)
+aws cloudformation create-stack \
+  --stack-name my-hermes \
+  --template-body file://template.yaml \
+  --parameters \
+    ParameterKey=EnvironmentName,ParameterValue=my-hermes \
+    ParameterKey=PackName,ParameterValue=hermes \
+    ParameterKey=InstanceType,ParameterValue=t4g.medium \
+    ParameterKey=DataVolumeSize,ParameterValue=0 \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
 
@@ -118,6 +138,63 @@ curl -sfL https://raw.githubusercontent.com/inceptionstack/loki-agent/main/unins
 ```
 
 Finds deployments by tag, lets you pick which to remove, deletes CloudFormation stacks or cleans up resources manually (Terraform deploys), and optionally removes state buckets/lock tables.
+
+---
+
+## Pack System
+
+Loki uses a **pack-based architecture** for deploying different AI agent runtimes. Each pack is a self-contained module with its own install script, manifest, and resources.
+
+### Available Packs
+
+| Pack | Type | Description |
+|------|------|-------------|
+| `bedrockify` | Base (auto-installed) | OpenAI-compatible proxy for Amazon Bedrock. Runs as a systemd daemon on port 8090. All agent packs depend on this. |
+| `openclaw` | Agent | Full stateful AI agent with 24/7 gateway, persistent memory, multi-channel support (Telegram, Discord, Slack). Includes Claude Code. |
+| `hermes` | Agent | NousResearch Hermes CLI agent. Lightweight, terminal-focused, uses bedrockify for model access. |
+
+### How It Works
+
+```
+install.sh → picks pack → CFN/SAM/Terraform → EC2 instance
+  └── bootstrap.sh --pack openclaw --region us-east-1 --model ...
+        ├── Phase 1: System setup (SSM, Node.js, volumes)
+        ├── Writes /tmp/loki-pack-config.json (packs read via jq)
+        ├── Phase 2: Install deps (bedrockify) → Install pack (openclaw/hermes)
+        └── Phase 3: Brain files, Claude Code, Bedrock check
+```
+
+Each pack reads only what it needs from the JSON config file. The bootstrap dispatcher resolves dependencies automatically from `packs/registry.yaml`.
+
+### Standalone Pack Usage
+
+Packs can also be run individually (e.g., on an existing EC2 instance):
+
+```bash
+# Install bedrockify + hermes manually
+git clone https://github.com/inceptionstack/loki-agent.git
+cd loki-agent
+
+# Install bedrockify first (dependency)
+bash packs/bedrockify/install.sh --region us-east-1 --port 8090
+
+# Then install your agent pack
+bash packs/hermes/install.sh --region us-east-1 --hermes-model anthropic/claude-opus-4.6
+
+# Or for OpenClaw
+bash packs/openclaw/install.sh --region us-east-1 --model us.anthropic.claude-opus-4-6-v1 --port 3001
+```
+
+### Adding New Packs
+
+To add a new agent runtime:
+
+1. Create `packs/<name>/` with `manifest.yaml`, `install.sh`, and `resources/`
+2. Add the pack to `packs/registry.yaml` with type, deps, and infra requirements
+3. Add to the `PackName` AllowedValues in all 3 deploy templates (CFN, SAM, Terraform)
+4. Add to the pack selection menu in `install.sh`
+
+See existing packs for the pattern. Each `install.sh` must be standalone-runnable with `--key value` CLI args and support `--help`.
 
 ---
 ## What's This Experiment About?
