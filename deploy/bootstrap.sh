@@ -376,25 +376,34 @@ export MISE_NODE_VERIFY=false
 mise use -g node@latest
 eval "$(/home/ec2-user/.local/bin/mise activate bash)"
 ok "Node installed: $(node --version 2>/dev/null || echo unknown)"
-
-# Loki aliases into .bashrc
-cat >> ~/.bashrc << 'ALIASES'
-alias loki='openclaw'
-alias lt='loki tui'
-alias gr='loki gateway restart'
-
-# Welcome banner (only for interactive login shells)
-if [[ $- == *i* ]] && [[ -z "$LOKI_BANNER_SHOWN" ]]; then
-  export LOKI_BANNER_SHOWN=1
-  printf '\n\033[1;35m🤖 InceptionStack Loki Environment (Based on OpenClaw)\033[0m\n\n'
-  printf '  loki tui              → Launch Loki terminal UI\n'
-  printf '  loki gateway          → Gateway status\n'
-  printf '  loki gateway restart  → Restart gateway\n\n'
-fi
-ALIASES
-ok "Loki aliases added to .bashrc"
 MISE_EOF
 ok "mise + Node.js setup complete"
+
+# ---- Pack-specific shell profile (aliases + banner) ----
+PACK_PROFILE="${PACKS_DIR}/${PACK_NAME}/resources/shell-profile.sh"
+if [[ -f "$PACK_PROFILE" ]]; then
+  # Source pack profile to get PACK_ALIASES, PACK_BANNER_NAME, etc.
+  source "$PACK_PROFILE"
+
+  # Write aliases to ec2-user .bashrc
+  sudo -u ec2-user bash -c "cat >> ~/.bashrc << 'ALIASES_BLOCK'
+${PACK_ALIASES}
+ALIASES_BLOCK"
+
+  # Write welcome banner to ec2-user .bashrc
+  sudo -u ec2-user bash -c "cat >> ~/.bashrc << 'BANNER_BLOCK'
+
+# Welcome banner (only for interactive login shells)
+if [[ \\\$- == *i* ]] && [[ -z \"\\\$LOKI_BANNER_SHOWN\" ]]; then
+  export LOKI_BANNER_SHOWN=1
+  printf '\n\033[1;35m${PACK_BANNER_EMOJI} InceptionStack ${PACK_BANNER_NAME}\033[0m\n\n'
+  printf '${PACK_BANNER_COMMANDS}\n'
+fi
+BANNER_BLOCK"
+  ok "Pack shell profile added to .bashrc (${PACK_NAME})"
+else
+  warn "No shell profile found for pack ${PACK_NAME}"
+fi
 
 # ---- .openclaw symlink ----
 step "Data Volume Symlink"
@@ -539,14 +548,23 @@ fi
 
 # ---- SSM Shell Profile ----
 step "SSM Shell Profile"
-cat > /etc/profile.d/loki.sh << 'LOKIPROFILE'
-# Loki SSM session: auto-switch to ec2-user with welcome banner
-if [ "$(whoami)" = "ssm-user" ] && [ -z "$LOKI_PROFILE_LOADED" ]; then
+# Re-source pack profile if available (may already be sourced, but safe to repeat)
+PACK_PROFILE="${PACKS_DIR}/${PACK_NAME}/resources/shell-profile.sh"
+_SSM_BANNER_EMOJI="🤖"
+_SSM_BANNER_NAME="Agent Environment"
+_SSM_BANNER_COMMANDS="  (no commands configured for this pack)"
+if [[ -f "$PACK_PROFILE" ]]; then
+  source "$PACK_PROFILE"
+  _SSM_BANNER_EMOJI="${PACK_BANNER_EMOJI}"
+  _SSM_BANNER_NAME="${PACK_BANNER_NAME}"
+  _SSM_BANNER_COMMANDS="${PACK_BANNER_COMMANDS}"
+fi
+cat > /etc/profile.d/loki.sh << LOKIPROFILE
+# SSM session: auto-switch to ec2-user with welcome banner
+if [ "\$(whoami)" = "ssm-user" ] && [ -z "\$LOKI_PROFILE_LOADED" ]; then
   export LOKI_PROFILE_LOADED=1
-  printf '\n\033[1;35m🤖 InceptionStack Loki Environment (Based on OpenClaw)\033[0m\n\n'
-  printf '  loki tui              → Launch Loki terminal UI\n'
-  printf '  loki gateway          → Gateway status\n'
-  printf '  loki gateway restart  → Restart gateway\n\n'
+  printf '\n\033[1;35m${_SSM_BANNER_EMOJI} InceptionStack ${_SSM_BANNER_NAME}\033[0m\n\n'
+  printf '${_SSM_BANNER_COMMANDS}\n'
   exec sudo -iu ec2-user
 fi
 LOKIPROFILE
