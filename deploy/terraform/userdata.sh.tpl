@@ -11,6 +11,8 @@ export LITELLM_API_KEY="${litellm_api_key}"
 export LITELLM_MODEL="${litellm_model}"
 export PROVIDER_API_KEY="${provider_api_key}"
 export PACK_NAME="${pack_name}"
+# Ensure git is available (not present on all AMIs)
+command -v git &>/dev/null || dnf install -y git || yum install -y git
 # Clone repo with retry (GitHub blips shouldn't kill bootstrap)
 for _attempt in 1 2 3; do
   git clone --depth 1 https://github.com/inceptionstack/loki-agent.git /tmp/loki-agent && break
