@@ -390,8 +390,16 @@ collect_config() {
   esac
   ok "Selected pack: ${PACK_NAME}"
 
+  # Count existing deployments to generate a smart default env name
+  local existing_count
+  existing_count=$(aws ec2 describe-vpcs \
+    --filters "Name=tag:loki:managed,Values=true" \
+    --region "$REGION" \
+    --query 'length(Vpcs)' --output text 2>/dev/null || echo "0")
+  local default_env_name="${PACK_NAME}-$((existing_count + 1))"
+
   echo ""
-  prompt "Environment name (lowercase, resource prefix)" ENV_NAME "loki"
+  prompt "Environment name (lowercase, resource prefix)" ENV_NAME "$default_env_name"
   ENV_NAME=$(echo "$ENV_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
   prompt "Loki watermark (tag to identify this deployment)" LOKI_WATERMARK "$ENV_NAME"
 
