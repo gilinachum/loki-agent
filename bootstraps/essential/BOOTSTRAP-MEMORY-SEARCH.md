@@ -1,61 +1,67 @@
 # BOOTSTRAP-MEMORY-SEARCH.md — Enable Semantic Memory Search with Bedrock Embeddings
 
+> **Applies to:** All agents (with agent-specific sections below)
+
 > **Run this once to enable memory search.** If `memory/.bootstrapped-memory-search` exists, skip — you've already done this.
 
 ## Overview
 
-OpenClaw's `memory_search` uses an OpenAI-compatible embeddings API. We run [embedrock](https://github.com/inceptionstack/embedrock) — a tiny Go binary that translates OpenAI `/v1/embeddings` calls into Amazon Bedrock embedding calls. No external API keys needed — uses the EC2 instance profile.
+Semantic memory search uses an OpenAI-compatible embeddings API. [bedrockify](https://github.com/inceptionstack/bedrockify) — already installed as a dependency of all agent packs — provides `/v1/embeddings` on localhost, translating OpenAI embedding calls into Amazon Bedrock embedding calls. No external API keys needed — uses the EC2 instance profile.
 
 ```
-OpenClaw memory_search → http://127.0.0.1:8089/v1/embeddings → embedrock → Bedrock Cohere Embed v4 → vector results
+memory_search → http://127.0.0.1:8090/v1/embeddings → bedrockify → Bedrock Titan Embed v2 → vector results
 ```
 
 ## Prerequisites
 
 - EC2 instance with IAM role that has `bedrock:InvokeModel` permission
-- Bedrock model access enabled for `cohere.embed-v4:0` in us-east-1
-- No Node.js or extra dependencies required — embedrock is a single static binary
+- Bedrock model access enabled for `amazon.titan-embed-text-v2:0` in us-east-1
+- **bedrockify already running** — installed and started by the bedrockify pack (dependency of both OpenClaw and Hermes)
 
-## Step 1: Install embedrock
+## Step 1: Verify bedrockify Is Running
 
-```bash
-# Linux arm64 (EC2 Graviton)
-curl -fsSL https://github.com/inceptionstack/embedrock/releases/latest/download/embedrock-linux-arm64 \
-  -o /tmp/embedrock && chmod +x /tmp/embedrock && sudo mv /tmp/embedrock /usr/local/bin/embedrock
-
-# Linux amd64
-curl -fsSL https://github.com/inceptionstack/embedrock/releases/latest/download/embedrock-linux-amd64 \
-  -o /tmp/embedrock && chmod +x /tmp/embedrock && sudo mv /tmp/embedrock /usr/local/bin/embedrock
-
-# Verify
-embedrock --version
-```
-
-## Step 2: Create a systemd service
+bedrockify is installed as a systemd service by the bedrockify pack. No separate installation needed.
 
 ```bash
-sudo tee /etc/systemd/system/embedrock.service > /dev/null << 'EOF'
-[Unit]
-Description=embedrock - Bedrock embedding proxy
-After=network.target
+# Check service status
+systemctl status bedrockify
+# Should show: active (running)
 
-[Service]
-Type=simple
-User=ec2-user
-ExecStart=/usr/local/bin/embedrock --port 8089 --region us-east-1 --model cohere.embed-v4:0
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable embedrock
-sudo systemctl start embedrock
+# Health check
+curl -s http://127.0.0.1:8090/
+# Expected: {"status":"ok",...}
 ```
 
-## Step 3: Configure OpenClaw
+If bedrockify is not running, check the service:
+
+```bash
+sudo journalctl -u bedrockify -n 20
+sudo systemctl restart bedrockify
+```
+
+## Step 2: Verify Embeddings Endpoint
+
+**Single embedding:**
+```bash
+curl -s -X POST http://127.0.0.1:8090/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"input": "test embedding", "model": "amazon.titan-embed-text-v2:0"}' \
+  | jq '{object, model, dims: (.data[0].embedding | length)}'
+# Expected: {"object":"list","model":"amazon.titan-embed-text-v2:0","dims":1024}
+```
+
+**Batch embeddings:**
+```bash
+curl -s -X POST http://127.0.0.1:8090/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"input": ["first text", "second text"], "model": "amazon.titan-embed-text-v2:0"}' \
+  | jq '{results: (.data | length), dims: [.data[].embedding | length]}'
+# Expected: {"results":2,"dims":[1024,1024]}
+```
+
+## OpenClaw-Specific Configuration
+
+### Step 3: Configure OpenClaw Memory Search
 
 Add this to your `openclaw.json` under `agents.defaults`:
 
@@ -64,11 +70,11 @@ Add this to your `openclaw.json` under `agents.defaults`:
   "enabled": true,
   "provider": "openai",
   "remote": {
-    "baseUrl": "http://127.0.0.1:8089/v1/",
+    "baseUrl": "http://127.0.0.1:8090/v1/",
     "apiKey": "not-needed"
   },
   "fallback": "none",
-  "model": "cohere.embed-v4:0",
+  "model": "amazon.titan-embed-text-v2:0",
   "query": {
     "hybrid": {
       "enabled": true,
@@ -85,52 +91,40 @@ Add this to your `openclaw.json` under `agents.defaults`:
 
 Then restart the OpenClaw gateway.
 
-## Step 4: Verify
+### Step 4: Verify End-to-End
 
-**Service running:**
-```bash
-systemctl status embedrock
-# Should show: active (running)
-```
+Ask the agent to run `memory_search` with any query. It should return ranked results from workspace memory files using hybrid search (70% vector, 30% text).
 
-**Health check:**
-```bash
-curl -s http://127.0.0.1:8089/
-# Expected: {"status":"ok","model":"cohere.embed-v4:0"}
-```
+## Hermes-Specific Configuration
 
-**Single embedding:**
-```bash
-curl -s -X POST http://127.0.0.1:8089/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{"input": "test embedding", "model": "cohere.embed-v4:0"}' \
-  | jq '{object, model, dims: (.data[0].embedding | length)}'
-# Expected: {"object":"list","model":"cohere.embed-v4:0","dims":1536}
-```
-
-**Batch embeddings:**
-```bash
-curl -s -X POST http://127.0.0.1:8089/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{"input": ["first text", "second text"], "model": "cohere.embed-v4:0"}' \
-  | jq '{results: (.data | length), dims: [.data[].embedding | length]}'
-# Expected: {"results":2,"dims":[1536,1536]}
-```
-
-**End-to-end memory search:**
-Ask Loki to run `memory_search` with any query. It should return ranked results from workspace memory files using hybrid search (70% vector, 30% text).
+> Hermes does not have a built-in memory search system. However, bedrockify's `/v1/embeddings` endpoint is available on `localhost:8090` for any custom embedding workflows or scripts you want to build around the Hermes agent.
+>
+> To use embeddings from a Hermes context:
+> ```bash
+> curl -s -X POST http://127.0.0.1:8090/v1/embeddings \
+>   -H "Content-Type: application/json" \
+>   -d '{"input": "your text here", "model": "amazon.titan-embed-text-v2:0"}'
+> ```
 
 ## Supported Models
 
-embedrock auto-detects model family by ID prefix:
+bedrockify supports embedding models based on the `--embed-model` flag set at install time. The default is `amazon.titan-embed-text-v2:0`. Common options:
 
 | Model | ID | Dims |
 |-------|----|------|
-| **Cohere Embed v4** (recommended) | `cohere.embed-v4:0` | 1536 |
+| **Titan Embed Text V2** (default) | `amazon.titan-embed-text-v2:0` | 1024 |
+| Titan Embed G1 Text | `amazon.titan-embed-g1-text-02` | 1536 |
 | Cohere Embed English v3 | `cohere.embed-english-v3` | 1024 |
 | Cohere Embed Multilingual v3 | `cohere.embed-multilingual-v3` | 1024 |
-| Titan Embed Text V2 | `amazon.titan-embed-text-v2:0` | 1024 |
-| Titan Embed G1 Text | `amazon.titan-embed-g1-text-02` | 1536 |
+
+To change the embedding model, update the bedrockify service configuration:
+
+```bash
+# Edit the bedrockify systemd service to change --embed-model
+sudo systemctl edit bedrockify
+# Add override for ExecStart with your preferred --embed-model
+sudo systemctl restart bedrockify
+```
 
 ## Finish
 

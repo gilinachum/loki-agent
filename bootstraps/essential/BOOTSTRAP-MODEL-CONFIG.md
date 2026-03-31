@@ -1,5 +1,7 @@
 # BOOTSTRAP-MODEL-CONFIG.md — Configure AI Models
 
+> **Applies to:** All agents (with agent-specific sections below)
+
 > **Run this FIRST — before all other bootstraps.**
 > Sets the right models for each context so you get quality where it matters and cost savings everywhere else.
 > If `memory/.bootstrapped-model-config` exists, skip.
@@ -11,7 +13,9 @@
 
 This gives you full Opus quality when talking to your human, while keeping automated/scheduled work cost-efficient.
 
-## Step 1: Configure Default Model + Heartbeat
+## OpenClaw-Specific Configuration
+
+### Step 1: Configure Default Model + Heartbeat
 
 Run this OpenClaw config patch:
 
@@ -34,7 +38,7 @@ EOF
 
 OpenClaw restarts automatically.
 
-## Step 2: Configure Cron Jobs
+### Step 2: Configure Cron Jobs
 
 All cron jobs with `payload.kind: "agentTurn"` should set their model to Sonnet 4.6.
 
@@ -60,7 +64,7 @@ openclaw cron list
 openclaw cron update <jobId> --model "amazon-bedrock/global.anthropic.claude-sonnet-4-6"
 ```
 
-## Step 3: Verify
+### Step 3: Verify
 
 ```bash
 openclaw config get agents.defaults.model
@@ -91,6 +95,47 @@ The `global.` inference profile routes across all AWS regions automatically — 
 - ✅ `global.anthropic.claude-opus-4-6-v1` (has `-v1`)
 
 Mixing these up causes invocation errors.
+
+## Hermes-Specific Configuration
+
+Hermes uses bedrockify (OpenAI-compatible Bedrock proxy on `localhost:8090`) for model access. Model configuration is in `~/.hermes/config.yaml` and `~/.hermes/.env`.
+
+### Step 1: Configure the Model
+
+Edit `~/.hermes/config.yaml` and set the model ID (OpenAI-style, not Bedrock-style):
+
+```yaml
+model: "anthropic/claude-opus-4.6"
+```
+
+The model ID is translated by bedrockify to the corresponding Bedrock model.
+
+### Step 2: Verify bedrockify Is Running
+
+```bash
+curl -sf http://127.0.0.1:8090/
+# Expected: {"status":"ok","model":"..."}
+```
+
+### Step 3: Test the Model
+
+```bash
+curl -sf http://127.0.0.1:8090/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"anthropic/claude-opus-4.6","messages":[{"role":"user","content":"Say OK"}]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
+```
+
+### Changing Models for Hermes
+
+To switch Hermes to a different model (e.g., Sonnet for cost savings):
+
+```yaml
+# ~/.hermes/config.yaml
+model: "anthropic/claude-sonnet-4.6"
+```
+
+Then restart Hermes. Bedrockify maps these OpenAI-style model IDs to Bedrock model IDs automatically.
 
 ## Finish
 

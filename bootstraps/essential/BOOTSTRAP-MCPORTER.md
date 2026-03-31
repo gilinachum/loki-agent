@@ -1,5 +1,7 @@
 # BOOTSTRAP-MCPORTER.md — MCPorter Setup
 
+> **Applies to:** OpenClaw only
+
 > **Run this once on first boot.** If `memory/.bootstrapped-mcporter` exists, skip — you've already done this.
 
 ## What Is MCPorter?
@@ -102,3 +104,9 @@ mkdir -p memory && echo "MCPorter bootstrapped $(date -u +%Y-%m-%dT%H:%M:%SZ)" >
 ```
 
 Report to the operator what MCP servers are configured and available.
+
+---
+
+## Hermes-Specific Configuration
+
+> Not applicable — MCPorter is an OpenClaw MCP tool integration. Hermes does not use the Model Context Protocol and has no equivalent MCP server infrastructure. Hermes interacts with AWS services directly via CLI commands.

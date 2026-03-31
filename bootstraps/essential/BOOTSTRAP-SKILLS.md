@@ -1,5 +1,7 @@
 # BOOTSTRAP-SKILLS.md — Skills Library Setup
 
+> **Applies to:** OpenClaw only
+
 > **Run this once on first boot.** If `memory/.bootstrapped-skills` exists, skip — you've already done this.
 
 ## 1. Install Skills
@@ -55,3 +57,9 @@ mkdir -p memory && echo "Skills bootstrapped $(date -u +%Y-%m-%dT%H:%M:%SZ)" > m
 ```
 
 Report the full list of installed skills to the operator.
+
+---
+
+## Hermes-Specific Configuration
+
+> Not applicable — Hermes does not have an auto-discovery skills system. OpenClaw automatically loads skills from the `skills/` directory in the workspace. Hermes capabilities are configured statically via its config file (`~/.hermes/config.yaml`).

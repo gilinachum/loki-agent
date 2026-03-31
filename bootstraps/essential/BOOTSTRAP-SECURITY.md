@@ -1,5 +1,7 @@
 # BOOTSTRAP-SECURITY.md — Security & Budget First-Run Setup
 
+> **Applies to:** All agents
+
 > **Run this once on first boot.** If `memory/.bootstrapped-security` exists, skip — you've already done this.
 
 ## 1. Meet Your Operator

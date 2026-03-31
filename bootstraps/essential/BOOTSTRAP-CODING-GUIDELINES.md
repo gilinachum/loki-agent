@@ -1,5 +1,7 @@
 # BOOTSTRAP-CODING-GUIDELINES.md — Coding Standards
 
+> **Applies to:** All agents
+
 > Add the **AGENTS.md snippet** at the bottom to your `AGENTS.md` — it's the token-optimized version Loki reads every session.
 > This full file is the reference for why each rule exists.
 

@@ -1,5 +1,7 @@
 # BOOTSTRAP-DAILY-UPDATE.md — Daily AWS Account Digest
 
+> **Applies to:** OpenClaw only
+
 > **Run this once to set up a daily morning briefing.**
 > If `memory/.bootstrapped-daily-update` exists, skip.
 
@@ -50,7 +52,7 @@ Run the daily AWS account briefing. Be concise — this goes to Telegram so no t
 ## 4. EC2 Health
 - aws ec2 describe-instance-status for running instances
 - Check disk: df -h / and flag if >80%
-- Check embedrock service: systemctl is-active embedrock
+- Check bedrockify service: systemctl is-active bedrockify
 
 ## 5. Format for Telegram
 Structure the output as:
@@ -129,3 +131,9 @@ Or ask Loki: *"Run the daily briefing now"*
 ```bash
 mkdir -p memory && echo "Daily update bootstrapped $(date -u +%Y-%m-%dT%H:%M:%SZ)" > memory/.bootstrapped-daily-update
 ```
+
+---
+
+## Hermes-Specific Configuration
+
+> Not applicable — Hermes does not have a built-in cron/scheduling system. Daily briefings require OpenClaw's `openclaw cron` facility. For Hermes deployments, use an external scheduler (systemd timer, cron, EventBridge) to trigger equivalent checks via shell scripts.

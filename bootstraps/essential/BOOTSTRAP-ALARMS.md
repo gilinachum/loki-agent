@@ -1,5 +1,7 @@
 # BOOTSTRAP-ALARMS.md — Instance Health Monitoring
 
+> **Applies to:** All agents (with agent-specific sections below)
+
 Alarms to deploy on every EC2 instance running a Loki agent. Designed to catch the failures we've actually seen — network death from crash-loops, Nitro card failures, disk fills, and silent service deaths.
 
 > **Dashboard name:** Use the agent's name (e.g. `Loki`, `Loki-Staging`, `Loki-Prod`). Set via the `DASHBOARD_TITLE` variable in the deploy steps below.
@@ -94,7 +96,9 @@ These require the health-check script (see below) running every 60 seconds via s
 
 All metrics published to namespace `Custom/Loki`.
 
-### 3.1 OpenClaw Gateway Alive
+### OpenClaw-Specific Service Checks
+
+#### 3.1a OpenClaw Gateway Alive
 
 ```
 Metric: Custom/Loki OpenClawAlive
@@ -103,13 +107,26 @@ Threshold: < 1 for 2 consecutive periods (1 min each)
 Action: SNS notify
 ```
 
-### 3.2 Embedrock Alive (conditional)
+### Hermes-Specific Service Checks
 
-Only created if `/usr/local/bin/embedrock` exists on the instance.
+#### 3.1b Hermes Agent Alive
 
 ```
-Metric: Custom/Loki EmbedrockAlive
-Value: 1 = systemd active + HTTP 200 on health endpoint, 0 = down
+Metric: Custom/Loki HermesAlive
+Value: 1 = hermes process running, 0 = not found
+Threshold: < 1 for 2 consecutive periods (1 min each)
+Action: SNS notify
+```
+
+### Common Service Checks (All Agents)
+
+### 3.2 Bedrockify Alive
+
+Both OpenClaw and Hermes depend on bedrockify. Monitor it on all instances.
+
+```
+Metric: Custom/Loki BedrockifyAlive
+Value: 1 = systemd active + HTTP 200 on health endpoint (port 8090), 0 = down
 Threshold: < 1 for 2 consecutive periods (1 min each)
 Action: SNS notify
 ```
@@ -153,8 +170,9 @@ Deploy to `/usr/local/bin/loki-health-check.sh`. Runs via systemd timer every 60
 Pushes all Tier 3 custom metrics in a single `put-metric-data` call (batched).
 
 **What it checks:**
-1. `pgrep -f openclaw-gatewa` — OpenClaw gateway process alive
-2. `systemctl is-active embedrock` + `curl -sf localhost:8089/` — Embedrock alive + healthy (skip if not installed)
+1. **OpenClaw instances:** `pgrep -f openclaw-gatewa` — OpenClaw gateway process alive
+   **Hermes instances:** `pgrep -f hermes` — Hermes agent process alive
+2. `systemctl is-active bedrockify` + `curl -sf localhost:8090/` — Bedrockify alive + healthy (required for all agents)
 3. `systemctl list-units --failed --no-legend | wc -l` — Failed unit count
 4. `df --output=pcent / | tail -1` — Root disk percent
 5. `free | awk '/Mem/ {printf "%.0f", $3/$2*100}'` — Memory percent
@@ -203,7 +221,7 @@ Provides a single-pane view of all alarms, service health, compute resources, ne
 | Row | Section | Widgets |
 |-----|---------|---------|
 | 1 | Header + Alarms | Title bar + all 10 alarm status indicators (green/red at a glance) |
-| 2 | Service Health | OpenClaw Gateway (up/down) · Embedrock (up/down) · Bedrock API + Failed Units |
+| 2 | Service Health | Agent Alive (OpenClaw/Hermes) · Bedrockify (up/down) · Bedrock API + Failed Units |
 | 3 | Compute | CPU (80% alarm line) · Memory (90% alarm line) · Disk (85% alarm line) |
 | 4 | Network & EC2 | Packets in/out · Bytes in/out · System + Instance status checks |
 | 5 | Disk I/O | EBS read/write ops · EBS read/write bytes |
@@ -229,7 +247,8 @@ Provides a single-pane view of all alarms, service health, compute resources, ne
           "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-system-status-check-failed",
           "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-instance-status-check-failed",
           "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-openclaw-down",
-          "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-embedrock-down",
+          "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-hermes-down",
+          "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-bedrockify-down",
           "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-bedrock-unreachable",
           "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-failed-units",
           "arn:aws:cloudwatch:us-east-1:ACCOUNT_ID:alarm:loki-cpu-high",
@@ -248,9 +267,10 @@ Provides a single-pane view of all alarms, service health, compute resources, ne
       "type": "metric",
       "x": 0, "y": 4, "width": 8, "height": 4,
       "properties": {
-        "title": "🤖 OpenClaw Gateway",
+        "title": "🤖 Agent Alive (OpenClaw / Hermes)",
         "metrics": [
-          [ "Custom/Loki", "OpenClawAlive", "InstanceId", "INSTANCE_ID", { "label": "Gateway Alive", "color": "#2ca02c" } ]
+          [ "Custom/Loki", "OpenClawAlive", "InstanceId", "INSTANCE_ID", { "label": "OpenClaw Gateway", "color": "#2ca02c" } ],
+          [ "Custom/Loki", "HermesAlive", "InstanceId", "INSTANCE_ID", { "label": "Hermes Agent", "color": "#ff7f0e" } ]
         ],
         "view": "timeSeries", "stacked": false, "region": "us-east-1",
         "period": 60, "stat": "Minimum",
@@ -262,9 +282,9 @@ Provides a single-pane view of all alarms, service health, compute resources, ne
       "type": "metric",
       "x": 8, "y": 4, "width": 8, "height": 4,
       "properties": {
-        "title": "🪨 Embedrock",
+        "title": "⚡ Bedrockify",
         "metrics": [
-          [ "Custom/Loki", "EmbedrockAlive", "InstanceId", "INSTANCE_ID", { "label": "Embedrock Alive", "color": "#1f77b4" } ]
+          [ "Custom/Loki", "BedrockifyAlive", "InstanceId", "INSTANCE_ID", { "label": "Bedrockify Alive", "color": "#1f77b4" } ]
         ],
         "view": "timeSeries", "stacked": false, "region": "us-east-1",
         "period": 60, "stat": "Minimum",

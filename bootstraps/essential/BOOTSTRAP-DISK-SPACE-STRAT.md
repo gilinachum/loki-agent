@@ -1,5 +1,7 @@
 # BOOTSTRAP-DISK-SPACE-STRAT.md — EC2 Disk Space Strategy
 
+> **Applies to:** All agents
+
 > **Assumption: This agent runs on an EC2 instance on AWS.**
 > If that's not the case, ignore this file.
 >

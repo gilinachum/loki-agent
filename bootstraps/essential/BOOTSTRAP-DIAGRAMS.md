@@ -1,5 +1,7 @@
 # Draw.io Diagram Style Guide — AWS re:Invent Dark Theme
 
+> **Applies to:** All agents
+
 ## Overview
 
 This style guide defines a consistent, professional diagram style inspired by AWS re:Invent presentation decks. Use it for all architecture diagrams unless explicitly told otherwise.
